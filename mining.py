@@ -22,11 +22,14 @@ class Mining:
         mines.append(mine)
         year = 0
         chart = Chart([], [])
-
+        total_year_cost = 0
         while self.total_reserve > 0:
             year += 1
             chart.collect_year_data(year)
-
+            if year == 1:
+                total_year_cost += self.init_cost + self.cost_open_mine
+            else:
+                total_year_cost += 0
             # condition to create a new mine
             # maximum profit
             # if self.count_available_mines(mines) == 0:
@@ -35,16 +38,21 @@ class Mining:
                 new_mine, total_profit = self.create_new_mine(total_profit, self.total_reserve)
                 if new_mine is not None:
                     mines.append(new_mine)
+                    total_year_cost += self.cost_open_mine
                     print("create a new mine")
             # digging mineral for profit
             for mine in mines:
                 if mine.is_active():
-                    profit, self.total_reserve = mine.digging(self.total_reserve)
+                    profit, self.total_reserve, current_year_cost_per_mine = mine.digging(self.total_reserve, 0)
                     total_profit += profit
-                    chart.collect_profit_data(total_profit)
+                    total_year_cost += current_year_cost_per_mine
             chart.collect_mine_data(mines)
-            print("Year: %s, profit: %s, total mines: %s, active mines: %s, remain mineral: %s" % (
-                year, total_profit, len(mines), self.count_available_mines(mines), self.total_reserve))
+            chart.collect_profit_data(total_profit)
+            chart.collect_cost_and_net_profit(total_year_cost)
+            print(
+                "Year: %s, profit: %s, total mines: %s, active mines: %s, remain mineral: %s, current_year_cost %s" % (
+                    year, total_profit, len(mines), self.count_available_mines(mines), self.total_reserve,
+                    total_year_cost))
             # check the infinite loop
             if self.total_reserve > 0 and self.count_available_mines(
                     mines) == 0 and self.cost_open_mine > total_profit:
@@ -52,6 +60,7 @@ class Mining:
                     year, total_profit, self.total_reserve))
                 break
         chart.draw_year_profit_line_chart()
+        chart.drew_cost_net_profit_line_chart()
         return year
 
     def create_new_mine(self, profit, reserve):
@@ -95,7 +104,7 @@ class Mine:
         self.life = self.life - 1
         pass
 
-    def digging(self, reserve):
+    def digging(self, reserve, current_cost):
 
         # check total reserve has enough mineral for this mine
         if reserve >= self.mine_capacity:
@@ -111,13 +120,16 @@ class Mine:
         else:
             # not enough reserve mineral left, update current mine capacity
             self.mine_capacity = reserve
-            return self.digging(self.mine_capacity)
+            return self.digging(self.mine_capacity, current_cost)
         self.operation()
-        return profit, reserve
+        current_cost += self.maintain_cost
+        return profit, reserve, current_cost
 
 
 class Chart:
     def __init__(self, year_list=None, profit_list=None):
+        self.cost_list = []
+        self.net_profit_list = []
         self.year_list = year_list
         self.profit_list = profit_list
         self.total_mines = []
@@ -143,11 +155,24 @@ class Chart:
         self.fig.update_yaxes(title_text="<b>Profit</b> Per Year", secondary_y=False)
         self.fig.update_yaxes(title_text="<b>Active Mine</b> Number", secondary_y=True)
 
-        self.fig.show()
 
     def collect_mine_data(self, mines):
         self.total_mines.append(len(mines))
         self.active_mines.append(Mining.count_available_mines(mines))
+
+    def collect_cost_and_net_profit(self, cost):
+        # self.net_profit_list.append(profit)
+        self.cost_list.append(cost)
+
+    def drew_cost_net_profit_line_chart(self):
+        rate = []
+        for i in range(len(self.cost_list)):
+            rate.append(self.cost_list[i] / self.profit_list[i])
+        self.fig.add_trace(go.Scatter(x=self.year_list, y=rate, name="Rate"))
+        self.fig.update_xaxes(title_text="Year")
+        self.fig.update_yaxes(title_text="Total Cost/Net Profit")
+        self.fig.update_layout(title='Total Cost/Net Profit Rate')
+        self.fig.show()
 
 
 # total reserved mineral(t)
